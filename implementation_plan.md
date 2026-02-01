@@ -1,79 +1,225 @@
-# Implementation Plan: Conversationalist Loop
+# Implementation Plan: Conversationalist Loop v3 (LangGraph Edition)
 
-This plan outlines the steps to implement the "Capture -> Store -> Train" loop for the Conversationalist agent, integrating the OMI Glasses context capture with the Redis-based memory system.
+## 🎯 Core Vision
+Build an AI agent that remembers every person you meet, surfaces relevant context in real-time, and continuously improves through Q-LoRA fine-tuning on your personal interaction data.
 
-## 1. Environment Setup
-The new repository `conversationalist` requires a robust Python environment to handle Audio, Vision, and Redis operations.
+---
 
-### Dependencies
-- **Audio/VAD**: `pyaudio`, `silero-vad`, `numpy`
-- **Transcription**: `faster-whisper`, `torch` (CUDA recommended)
-- **Vision/Face**: `insightface`, `onnxruntime-gpu` (for face embeddings)
-- **Storage**: `redis`
-- **LLM**: `anthropic` (for extraction)
+## 🏗️ Architecture Overview (LangGraph + Skills Pattern)
 
-### Setup Script (`setup_env.ps1`)
-We will create a script to:
-1. Create a `venv`.
-2. Install PyTorch with CUDA support.
-3. Install all project requirements.
+Based on the scoring criteria (Distributed Dev 5/5, Parallelization 5/5, Multi-hop 5/5, Direct User Interaction 5/5), we use a **Hybrid Skills + Subagents** pattern with LangGraph.
 
-## 2. The Loop Architecture
-
-The system follows a continuous loop:
-
-```mermaid
-graph TD
-    A[Capture Context] -->|Audio + Video| B(Process Input)
-    B -->|Transcript + Face Embedding| C[Store Knowledge]
-    C -->|Store to Redis| D[Redis Database]
-    D -->|Retrieve Persona/Context| E[Self-Improve / Agent]
-    E -->|Update Model/Prompts| A
+```
+┌─────────────────────────────────────────────────────────────────────┐
+│                        CAPTURE LAYER                                 │
+│  [Laptop Mic] ─→ Silero VAD ─→ Whisper ─→ Transcript                │
+│  [OMI Glasses] ─→ Video Feed ───────────→ Image Frames             │
+└──────────────────────────┬──────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                  LANGGRAPH AGENT (StateGraph)                        │
+│                                                                      │
+│   START ────────────┬────────────────────┐                          │
+│                     │                    │                          │
+│                     ▼                    ▼                          │
+│            ┌────────────────┐   ┌────────────────────┐              │
+│            │ process_face   │   │ analyze_transcript │              │
+│            │ (Skill A)      │   │ (Skill B)          │              │
+│            └───────┬────────┘   └─────────┬──────────┘              │
+│                    │                      │                          │
+│                    └──────────┬───────────┘                          │
+│                               ▼                                      │
+│                    ┌────────────────────┐                            │
+│                    │  lookup_person     │                            │
+│                    │  (Redis VSS)       │                            │
+│                    └─────────┬──────────┘                            │
+│                              │                                       │
+│                    [conditional routing]                             │
+│                     /                 \                              │
+│                    ▼                   ▼                             │
+│         ┌─────────────────┐   ┌────────────────┐                    │
+│         │ generate_trigger│   │ store_encounter│                    │
+│         │ (Smart Memory)  │   │ (Redis)        │                    │
+│         └────────┬────────┘   └───────┬────────┘                    │
+│                  │                    │                              │
+│                  └────────┬───────────┘                              │
+│                           ▼                                          │
+│                         END → Trigger Message                        │
+│                                                                      │
+│   ─────────────── Weave Telemetry Throughout ──────────────         │
+└─────────────────────────────────────────────────────────────────────┘
+                           │
+                           ▼
+┌─────────────────────────────────────────────────────────────────────┐
+│                      STORAGE LAYER (Redis)                           │
+│  ┌─────────────┐  ┌─────────────┐  ┌─────────────────────────┐      │
+│  │ Face Index  │  │ Person      │  │ Conversation            │      │
+│  │ (VSS)       │  │ Profiles    │  │ History                 │      │
+│  └─────────────┘  └─────────────┘  └─────────────────────────┘      │
+└─────────────────────────────────────────────────────────────────────┘
 ```
 
-### Component 1: Capture Context (`capture_service/`)
-**Current Status**: `pipecat_glasses_sync.py` captures audio via laptop mic (Sileo VAD) and syncs it with OMI Glasses video feed.
-**Missing Piece**: Face Embedding Generation.
-**Action**:
-- Update `pipecat_glasses_sync.py` to import `insightface`.
-- When a video frame is captured during speech, run Face Detection + Embedding.
-- Output: `Transcript`, `Face Embedding`, `Timestamp`.
+---
 
-### Component 2: Store Knowledge (`person_store.py`)
-**Current Status**: Exists. Handles Redis connection, profile creation, and conversation storage.
-**Integration**:
-- Create a bridge script (`bridge.py` or modify `pipecat_glasses_sync.py`) to import `person_store`.
-- When a transcript is finalized in `pipecat_glasses_sync.py`:
-    1. Call `person_store.process_encounter(face_embedding, transcript)`.
-    2. Receive back the `recall_summary`.
-    3. Display this summary in the UI (e.g., "Oh, that's Sarah from Stripe!").
+## 📁 Current Project Structure
 
-### Component 3: Self-Improve (Train/Q-LoRA)
-**Concept**: The agent should "learn" from these interactions better than just RAG.
-**Action**:
-- **Data Collection**: `person_store.py` already saves conversation history.
-- **Training Pipeline**:
-    1. Export recent conversations from Redis.
-    2. Format into `(Instruction, Input, Output)` tuples for Q-LoRA.
-    3. Fine-tune a small LLM (e.g., Llama-3-8B or similar) on this personal data to better "mimic" the user's memory or style.
-    *Note: This is a heavy asynchronous task.*
-
-## 3. Immediate Implementation Steps
-
-1. **Verify `capture_service`**: Ensure the migrated scripts run in the new repo.
-2. **Add Face Recognition**: Install `insightface` and integrate it into the capture loop.
-3. **Connect to Redis**: Update `pipecat_glasses_sync.py` to use `person_store.process_encounter`.
-4. **UI Update**: Show the "Recall Summary" in the HTML frontend overlay.
-
-## 4. Directory Structure
 ```
 conversationalist/
-├── capture_service/           # [MIGRATED] Audio/Visual capture logic
-│   ├── pipecat_glasses_sync.py
-│   ├── whisper_service.py
-│   └── ...
-├── person_store.py            # [EXISTING] Redis memory logic
-├── examples/                  # Reference scripts
-├── setup_env.ps1             # [NEW] Installation helper
-└── requirements.txt           # Updated dependencies
+├── agent.py                    # 🆕 LangGraph agent with Skills pattern
+├── orchestrator.py             # Original orchestrator (being replaced by agent.py)
+├── person_store.py             # Redis storage - face vectors, profiles
+├── face_service.py             # 🆕 Face embedding (DeepFace + InsightFace)
+├── implementation_plan.md      # This file
+├── requirements.txt            # Updated dependencies
+├── example.py                  # Original example
+├── capture_service/            # Migrated from OMI Glasses project
+│   ├── pipecat_glasses_sync.py # Audio/video capture + sync
+│   ├── whisper_service.py      # Local Whisper transcription
+│   ├── faster_whisper_service.py
+│   └── audio_decoder.py
+└── .venv/                      # Python virtual environment
 ```
+
+---
+
+## 🔧 Key Components
+
+### 1. `agent.py` - LangGraph Agent
+The main brain using LangGraph's StateGraph pattern:
+
+```python
+# Skills (nodes in the graph)
+- process_face_node      # Extract face embedding from image
+- analyze_transcript_node # Extract structured info from text
+- fact_check_node        # 🆕 Real-time W&B verification
+- lookup_person_node     # Find person in Redis by face
+- generate_trigger_node  # Create smart memory trigger
+- store_encounter_node   # Save to Redis
+
+# Edges (parallel + conditional)
+START → [process_face, analyze_transcript]  # Parallel start? No, currently seq for safety
+flow: process_face -> analyze -> fact_check -> lookup -> (trigger/store)
+```
+
+### 2. `face_service.py` - Multi-Modal Face Recognition
+Supports multiple backends:
+- **DeepFace** (Primary): Easy install, uses Facenet512 model
+- **InsightFace** (Fallback): Better accuracy, needs C++ build tools
+
+### 3. `person_store.py` - Redis Knowledge Store
+- Vector Similarity Search (VSS) for face matching
+- Profile storage with conversation history
+- W&B Inference-powered detail extraction
+
+---
+
+## 🧠 Smart Features ("Show Stoppers")
+
+### 1. Real-time Fact Checking ⚡
+- Uses **Llama-3.1-70B** via W&B Inference
+- Verifies claims instantly (e.g. "I founded Google in 1995" -> False)
+- Displays verdict in UI
+
+### 2. Contextual Memory 🧠
+- **Encoding Specificity**: Match retrieval cues
+- **Temporal Anchoring**: "Last saw 2 weeks ago"
+- **Distinctive Details**: "Has a corgi named Biscuit"
+
+---
+
+## 📋 Implementation Checklist
+
+### Phase 1: Core Infrastructure ✅
+- [x] Clone and set up `conversationalist` repo
+- [x] Migrate capture service scripts
+- [x] Install dependencies
+- [x] Create LangGraph agent (`agent.py`)
+- [x] Create face service (`face_service.py`)
+
+### Phase 2: Integration ✅
+- [x] Connect capture service to LangGraph agent
+- [x] Test face embedding extraction
+- [x] Test full pipeline: image → embedding → lookup → trigger
+- [x] **New**: Add Fact Checking Node
+- [x] **New**: Create Live Dashboard UI
+
+### Phase 3: Weave Telemetry ✅
+- [x] Initialize Weave with `@weave.op()` decorators
+- [x] Track all key operations
+- [x] Set up for Q-LoRA data collection
+
+### Phase 3: Weave Telemetry ✅
+- [x] Initialize Weave with `@weave.op()` decorators
+- [x] Track all key operations
+- [x] Set up for Q-LoRA data collection
+
+### Phase 4: Q-LoRA Training (Future)
+- [ ] Export training data from Weave
+- [ ] Format for fine-tuning
+- [ ] Train Q-LoRA adapters
+- [ ] Deploy personalized model
+
+---
+
+## 🔑 Environment Variables
+
+```bash
+# Weights & Biases / Weave
+export WANDB_API_KEY=your_key
+export WANDB_PROJECT=conversationalist
+
+# Redis Cloud
+export REDIS_HOST=redis-15003.c89.us-east-1-3.ec2.cloud.redislabs.com
+export REDIS_PORT=15003
+export REDIS_PASSWORD=your_password
+
+# Anthropic (for Claude)
+export ANTHROPIC_API_KEY=your_key
+```
+
+---
+
+## 🚀 Quick Start
+
+```bash
+# 1. Activate environment
+cd d:\Projects\TreeHacks\conversationalist
+.\.venv\Scripts\activate
+
+# 2. Set environment variables
+$env:WANDB_API_KEY="your_key"
+$env:ANTHROPIC_API_KEY="your_key"
+
+# 3. Test LangGraph agent
+python agent.py
+
+# 4. Run capture service (in another terminal)
+cd capture_service
+python pipecat_glasses_sync.py
+```
+
+---
+
+## 📊 Weave Dashboard
+
+Once running, Weave provides:
+- **Trace Viewer**: See every agent execution
+- **Latency Metrics**: Optimize performance
+- **Feedback Collection**: Rate trigger quality
+- **Training Export**: Get data for Q-LoRA
+
+Access at: https://wandb.ai/<your-team>/conversationalist/weave
+
+---
+
+## 🔄 The Loop (Complete Flow)
+
+1. **Capture**: Mic picks up speech → Silero VAD triggers recording
+2. **Process**: Whisper transcribes, glasses capture frames
+3. **Recognize**: Face embedding generated, matched in Redis
+4. **Retrieve**: If known person, fetch profile + generate trigger
+5. **Store**: Save new encounter details to profile
+6. **Learn**: Weave logs all interactions → Export for Q-LoRA
+7. **Improve**: Fine-tuned model provides better triggers
+8. **Repeat**: Loop back to capture

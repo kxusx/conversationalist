@@ -78,13 +78,18 @@ def bytes_to_embedding(data: bytes) -> list:
 
 
 def extract_details_from_transcript(transcript: str) -> dict:
-    """Use Claude to extract structured person details from conversation."""
-    response = anthropic.messages.create(
-        model="claude-sonnet-4-20250514",
-        max_tokens=1024,
-        messages=[{
-            "role": "user",
-            "content": f"""Extract information about the OTHER person (not the user) from this conversation.
+    """Use LLM to extract structured person details from conversation.
+    
+    Tries Anthropic first, falls back to W&B Inference if not available.
+    """
+    # Try Anthropic first
+    try:
+        response = anthropic.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=1024,
+            messages=[{
+                "role": "user",
+                "content": f"""Extract information about the OTHER person (not the user) from this conversation.
 
 Transcript:
 {transcript}
@@ -100,9 +105,28 @@ Return valid JSON only, no markdown:
     "follow_ups": ["things to follow up on - intros promised, plans made, etc"],
     "memorable_quotes": ["interesting things they said"]
 }}"""
-        }]
-    )
-    return json.loads(response.content[0].text)
+            }]
+        )
+        return json.loads(response.content[0].text)
+    except Exception as e:
+        # Fallback to W&B Inference
+        print(f"[STORE] Anthropic unavailable ({e}), trying W&B Inference...")
+        try:
+            import wandb_inference
+            return wandb_inference.extract_person_details(transcript)
+        except Exception as e2:
+            print(f"[STORE] W&B Inference also failed: {e2}")
+            # Return empty structure
+            return {
+                "name": None,
+                "company": None,
+                "role": None,
+                "interests": [],
+                "personal_facts": [],
+                "topics_discussed": [],
+                "follow_ups": [],
+                "memorable_quotes": []
+            }
 
 
 def find_person_by_face(face_embedding: list) -> Optional[str]:

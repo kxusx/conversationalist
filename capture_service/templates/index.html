@@ -1,0 +1,1055 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Conversationalist</title>
+    <!-- Fonts -->
+    <link
+        href="https://fonts.googleapis.com/css2?family=Lexend:wght@300;400;500;600&family=Inter:wght@300;400;500;600&display=swap"
+        rel="stylesheet">
+    <!-- Unicons -->
+    <link rel="stylesheet" href="https://unicons.iconscout.com/release/v4.0.0/css/line.css">
+
+    <style>
+        :root {
+            --bg: #0f1014;
+            --surface: #18191f;
+            --surface-hover: #21232c;
+            --primary: #5c6bc0;
+            --primary-glow: rgba(92, 107, 192, 0.4);
+            --accent: #26a69a;
+            --text-main: #e2e8f0;
+            --text-sub: #94a3b8;
+            --border: #2d3748;
+            --success: #66bb6a;
+            --warning: #ffa726;
+            --error: #ef5350;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--bg);
+            color: var(--text-main);
+            height: 100vh;
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* HEADER */
+        header {
+            background: rgba(15, 16, 20, 0.95);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid var(--border);
+            padding: 1rem 2rem;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            height: 70px;
+            box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1);
+            z-index: 100;
+        }
+
+        .brand {
+            font-family: 'Lexend', sans-serif;
+            font-size: 1.5rem;
+            font-weight: 600;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            color: var(--primary);
+            text-shadow: 0 0 20px var(--primary-glow);
+        }
+
+        .brand img {
+            height: 32px;
+            width: auto;
+        }
+
+        .brand span {
+            color: var(--text-main);
+        }
+
+        .status-pill {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: var(--surface);
+            padding: 6px 12px;
+            border-radius: 20px;
+            font-size: 0.85rem;
+            border: 1px solid var(--border);
+            transition: all 0.3s ease;
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: var(--text-sub);
+            box-shadow: 0 0 5px rgba(255, 255, 255, 0.2);
+        }
+
+        .status-dot.active {
+            background: var(--success);
+            box-shadow: 0 0 8px var(--success);
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0% {
+                transform: scale(1);
+                opacity: 1;
+            }
+
+            50% {
+                transform: scale(1.2);
+                opacity: 0.8;
+            }
+
+            100% {
+                transform: scale(1);
+                opacity: 1;
+            }
+        }
+
+        /* MAIN LAYOUT */
+        main {
+            flex: 1;
+            display: grid;
+            grid-template-columns: 2fr 1fr;
+            gap: 20px;
+            padding: 20px;
+            height: calc(100vh - 70px);
+        }
+
+        /* LEFT PANEL: Live Feed & Transcript */
+        .feed-container {
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            height: 100%;
+        }
+
+        .video-wrapper {
+            position: relative;
+            border-radius: 12px;
+            overflow: hidden;
+            background: #000;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+            aspect-ratio: 16/9;
+            flex-shrink: 0;
+            max-height: 40vh;
+        }
+
+        #video-feed {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        .overlay-info {
+            position: absolute;
+            bottom: 15px;
+            left: 15px;
+            background: rgba(0, 0, 0, 0.7);
+            color: white;
+            padding: 5px 10px;
+            border-radius: 6px;
+            font-size: 0.8rem;
+            backdrop-filter: blur(4px);
+            display: flex;
+            gap: 10px;
+        }
+
+        /* TRANSCRIPT SECTION */
+        .transcript-box {
+            flex: 1;
+            background: var(--surface);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            position: relative;
+        }
+
+        .box-header {
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.03);
+            border-bottom: 1px solid var(--border);
+            font-size: 0.9rem;
+            font-weight: 500;
+            color: var(--text-sub);
+            display: flex;
+            justify-content: space-between;
+        }
+
+        #transcript-content {
+            flex: 1;
+            padding: 16px;
+            overflow-y: auto;
+            font-family: 'Inter', sans-serif;
+            line-height: 1.6;
+            color: var(--text-main);
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+            scroll-behavior: smooth;
+        }
+
+        .message {
+            padding: 10px 14px;
+            border-radius: 8px;
+            background: rgba(255, 255, 255, 0.03);
+            border-left: 3px solid var(--primary);
+            animation: fadeIn 0.3s ease;
+        }
+
+        .message.final {
+            border-left-color: var(--success);
+            background: rgba(102, 187, 106, 0.05);
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(5px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        /* RIGHT PANEL: Context & Memory */
+        .context-panel {
+            background: var(--surface);
+            border-radius: 12px;
+            border: 1px solid var(--border);
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 20px;
+            overflow-y: auto;
+        }
+
+        /* PERSON CARD */
+        .person-card {
+            background: linear-gradient(145deg, var(--surface-hover), var(--surface));
+            border-radius: 12px;
+            padding: 20px;
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            text-align: center;
+            display: none;
+            /* Hidden until person detected */
+            animation: slideIn 0.5s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+
+        .person-card.visible {
+            display: block;
+        }
+
+        .avatar-ring {
+            width: 80px;
+            height: 80px;
+            border-radius: 50%;
+            margin: 0 auto 15px;
+            padding: 3px;
+            background: linear-gradient(45deg, var(--primary), var(--accent));
+            position: relative;
+        }
+
+        .avatar {
+            width: 100%;
+            height: 100%;
+            border-radius: 50%;
+            background: #2d3748;
+            object-fit: cover;
+            border: 3px solid var(--surface);
+        }
+
+        .person-name {
+            font-family: 'Lexend', sans-serif;
+            font-size: 1.4rem;
+            font-weight: 600;
+            color: white;
+            margin-bottom: 5px;
+        }
+
+        .person-role {
+            font-size: 0.9rem;
+            color: var(--text-sub);
+            margin-bottom: 10px;
+        }
+
+        .person-details {
+            text-align: left;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            padding: 12px;
+            margin: 10px 0;
+            font-size: 0.85rem;
+        }
+
+        .detail-row {
+            display: flex;
+            align-items: flex-start;
+            gap: 8px;
+            margin-bottom: 8px;
+            color: var(--text-sub);
+        }
+
+        .detail-row:last-child {
+            margin-bottom: 0;
+        }
+
+        .detail-row i {
+            color: var(--primary);
+            width: 16px;
+            flex-shrink: 0;
+            margin-top: 2px;
+        }
+
+        .detail-row .label {
+            color: var(--text-sub);
+            font-weight: 500;
+            min-width: 70px;
+        }
+
+        .detail-row .value {
+            color: var(--text-main);
+        }
+
+        .person-stats {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin: 10px 0;
+            padding: 10px 0;
+            border-top: 1px solid var(--border);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .stat-item {
+            text-align: center;
+        }
+
+        .stat-value {
+            font-family: 'Lexend', sans-serif;
+            font-size: 1.2rem;
+            font-weight: 600;
+            color: var(--accent);
+        }
+
+        .stat-label {
+            font-size: 0.7rem;
+            color: var(--text-sub);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .tag-container {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 8px;
+            justify-content: center;
+            margin-top: 10px;
+        }
+
+        .tag {
+            background: rgba(255, 255, 255, 0.1);
+            padding: 4px 10px;
+            border-radius: 12px;
+            font-size: 0.75rem;
+            color: var(--text-main);
+        }
+
+        .tag.interest {
+            background: rgba(92, 107, 192, 0.2);
+            border: 1px solid var(--primary-glow);
+        }
+
+        .tag.topic {
+            background: rgba(38, 166, 154, 0.2);
+            border: 1px solid rgba(38, 166, 154, 0.4);
+        }
+
+        /* SMART TRIGGER */
+        .trigger-box {
+            background: rgba(92, 107, 192, 0.1);
+            border: 1px solid var(--primary-glow);
+            border-radius: 12px;
+            padding: 15px;
+            position: relative;
+            overflow: hidden;
+            display: none;
+            /* Hidden until trigger generated */
+        }
+
+        .trigger-box.visible {
+            display: flex;
+            flex-direction: column;
+            animation: popIn 0.4s cubic-bezier(0.175, 0.885, 0.32, 1.275);
+        }
+
+        .trigger-header {
+            font-size: 0.75rem;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--primary);
+            margin-bottom: 8px;
+            display: flex;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .trigger-content {
+            font-size: 1rem;
+            line-height: 1.5;
+            color: #fff;
+            font-weight: 500;
+        }
+
+        /* PIPELINE VISUALIZATION */
+        .pipeline-section {
+            margin-top: auto;
+            border-top: 1px solid var(--border);
+            padding-top: 15px;
+        }
+
+        .pipeline-header {
+            font-size: 0.75rem;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-sub);
+            margin-bottom: 12px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .pipeline-flow {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .pipeline-step {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 8px 12px;
+            background: rgba(0, 0, 0, 0.2);
+            border-radius: 8px;
+            border-left: 3px solid var(--border);
+            transition: all 0.3s ease;
+        }
+
+        .pipeline-step.active {
+            border-left-color: var(--success);
+            background: rgba(102, 187, 106, 0.1);
+        }
+
+        .pipeline-step.processing {
+            border-left-color: var(--warning);
+            background: rgba(255, 167, 38, 0.1);
+            animation: pulseStep 1s infinite;
+        }
+
+        @keyframes pulseStep {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.6; }
+        }
+
+        .pipeline-step .step-icon {
+            width: 28px;
+            height: 28px;
+            border-radius: 6px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 0.9rem;
+            flex-shrink: 0;
+        }
+
+        .pipeline-step .step-icon.weave {
+            background: linear-gradient(135deg, #ff6b35, #f7931e);
+        }
+
+        .pipeline-step .step-icon.redis {
+            background: linear-gradient(135deg, #dc382d, #a41e11);
+        }
+
+        .pipeline-step .step-icon.llm {
+            background: linear-gradient(135deg, #5c6bc0, #3f51b5);
+        }
+
+        .pipeline-step .step-info {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .pipeline-step .step-name {
+            font-size: 0.8rem;
+            font-weight: 500;
+            color: var(--text-main);
+        }
+
+        .pipeline-step .step-detail {
+            font-size: 0.7rem;
+            color: var(--text-sub);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        .pipeline-step .step-count {
+            font-family: 'Lexend', sans-serif;
+            font-size: 0.9rem;
+            font-weight: 600;
+            color: var(--accent);
+            min-width: 30px;
+            text-align: right;
+        }
+
+        /* WEAVE LOGS */
+        .logs-container {
+            margin-top: 15px;
+            padding-top: 10px;
+            border-top: 1px solid var(--border);
+        }
+
+        .log-item {
+            font-family: 'Consolas', monospace;
+            font-size: 0.7rem;
+            color: var(--text-sub);
+            padding: 3px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+        }
+
+        @keyframes slideIn {
+            from {
+                opacity: 0;
+                transform: translateX(20px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateX(0);
+            }
+        }
+
+        @keyframes popIn {
+            from {
+                opacity: 0;
+                transform: scale(0.9);
+            }
+
+            to {
+                opacity: 1;
+                transform: scale(1);
+            }
+        }
+
+        /* SCROLLBAR */
+        ::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: rgba(0, 0, 0, 0.1);
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 3px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: var(--button-bg-hover);
+        }
+    </style>
+</head>
+
+<body>
+    <header>
+        <div class="brand">
+            <img src="/assets/weave_logo.png" alt="Conversationalist" onerror="this.style.display='none'">
+            Conversationalist <span>Agent</span>
+        </div>
+
+        <div style="display: flex; gap: 15px;">
+            <div class="status-pill">
+                <div id="vad-dot" class="status-dot"></div>
+                <span id="vad-status">Listening...</span>
+            </div>
+
+            <div class="status-pill" style="border-color: var(--primary-glow);">
+                <i class="uil uil-eye"></i>
+                <span id="face-count">0 Faces</span>
+            </div>
+
+            <a href="https://wandb.ai/notpathu-san-jose-state-university/conversationalist/weave" target="_blank"
+                class="status-pill" style="text-decoration: none; color: var(--text-main);">
+                <img src="/assets/weave_logo.png" width="16" height="16" alt="Weave" onerror="this.src='https://wandb.ai/favicon.ico'">
+                <span>Weave</span>
+            </a>
+
+            <div class="status-pill" style="border-color: rgba(220, 53, 69, 0.4);">
+                <img src="/assets/redis_logo.png" width="16" height="16" alt="Redis" onerror="this.style.display='none'">
+                <span id="redis-status">Redis</span>
+            </div>
+        </div>
+    </header>
+
+    <main>
+        <!-- LEFT: Video & Transcription -->
+        <div class="feed-container">
+            <div class="video-wrapper">
+                <img id="video-feed" src="/video_feed" alt="Live Feed waiting..."
+                    onerror="this.src='https://via.placeholder.com/800x450/000000/FFFFFF?text=Waiting+for+Glasses+Feed...'">
+                <div class="overlay-info">
+                    <i class="uil uil-video"></i> Live Feed
+                </div>
+            </div>
+
+            <div class="transcript-box">
+                <div class="box-header">
+                    <span><i class="uil uil-comment-alt-lines"></i> Live Transcript</span>
+                    <span style="font-size: 0.8rem; opacity: 0.6;">Powered by Whisper</span>
+                </div>
+                <div id="transcript-content">
+                    <!-- Messages injected here -->
+                    <div class="message" style="opacity: 0.5;">Waiting for speech...</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- RIGHT: Intelligence Panel -->
+        <div class="context-panel">
+            <!-- Person Card -->
+            <div id="person-card" class="person-card">
+                <div class="avatar-ring">
+                    <img id="person-avatar" src="https://via.placeholder.com/100" class="avatar" alt="Person">
+                </div>
+                <h2 id="person-name" class="person-name">Unknown Person</h2>
+                <div id="person-role" class="person-role">--</div>
+
+                <!-- Person Stats -->
+                <div id="person-stats" class="person-stats" style="display: none;">
+                    <div class="stat-item">
+                        <div id="encounter-count" class="stat-value">0</div>
+                        <div class="stat-label">Encounters</div>
+                    </div>
+                    <div class="stat-item">
+                        <div id="last-seen" class="stat-value">--</div>
+                        <div class="stat-label">Last Seen</div>
+                    </div>
+                </div>
+
+                <!-- Person Details -->
+                <div id="person-details" class="person-details" style="display: none;">
+                    <div id="detail-company" class="detail-row" style="display: none;">
+                        <i class="uil uil-building"></i>
+                        <span class="value"></span>
+                    </div>
+                    <div id="detail-interests" class="detail-row" style="display: none;">
+                        <i class="uil uil-heart"></i>
+                        <span class="value"></span>
+                    </div>
+                    <div id="detail-fact" class="detail-row" style="display: none;">
+                        <i class="uil uil-lightbulb-alt"></i>
+                        <span class="value"></span>
+                    </div>
+                    <div id="detail-followup" class="detail-row" style="display: none;">
+                        <i class="uil uil-comment-notes"></i>
+                        <span class="value"></span>
+                    </div>
+                </div>
+
+                <!-- Tags: Topics & Interests -->
+                <div id="person-tags" class="tag-container">
+                    <!-- Tags injected here -->
+                </div>
+            </div>
+
+            <!-- Smart Trigger -->
+            <div id="trigger-box" class="trigger-box">
+                <div class="trigger-header">
+                    <i class="uil uil-lightbulb-alt"></i> Memory Trigger
+                </div>
+                <div id="trigger-text" class="trigger-content">
+                    --
+                </div>
+            </div>
+
+            <!-- Pipeline Visualization -->
+            <div class="pipeline-section">
+                <div class="pipeline-header">
+                    <i class="uil uil-process"></i> Live Pipeline
+                </div>
+                <div class="pipeline-flow">
+                    <!-- Weave Telemetry -->
+                    <div id="step-weave" class="pipeline-step">
+                        <div class="step-icon weave">
+                            <i class="uil uil-chart-line"></i>
+                        </div>
+                        <div class="step-info">
+                            <div class="step-name">Weave Telemetry</div>
+                            <div id="weave-detail" class="step-detail">Logging all interactions...</div>
+                        </div>
+                        <div id="weave-count" class="step-count">0</div>
+                    </div>
+
+                    <!-- Redis Vector Store -->
+                    <div id="step-redis" class="pipeline-step">
+                        <div class="step-icon redis">
+                            <i class="uil uil-database"></i>
+                        </div>
+                        <div class="step-info">
+                            <div class="step-name">Redis VSS</div>
+                            <div id="redis-detail" class="step-detail">Face embeddings + profiles</div>
+                        </div>
+                        <div id="redis-count" class="step-count">0</div>
+                    </div>
+
+                    <!-- LLM Processing -->
+                    <div id="step-llm" class="pipeline-step">
+                        <div class="step-icon llm">
+                            <i class="uil uil-brain"></i>
+                        </div>
+                        <div class="step-info">
+                            <div class="step-name">Llama 3.1 70B</div>
+                            <div id="llm-detail" class="step-detail">Memory triggers + extraction</div>
+                        </div>
+                        <div id="llm-count" class="step-count">0</div>
+                    </div>
+                </div>
+
+                <!-- Compact Logs -->
+                <div class="logs-container">
+                    <div id="system-logs">
+                        <div class="log-item">> System initialized</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+    </main>
+
+    <script>
+        // WebSocket logic (placeholder for actual implementation)
+        const transcriptContent = document.getElementById('transcript-content');
+        const vadDot = document.getElementById('vad-dot');
+        const vadStatus = document.getElementById('vad-status');
+
+        // Pipeline counters
+        let weaveCount = 0;
+        let redisCount = 0;
+        let llmCount = 0;
+
+        // Function to add message (keep only last 5)
+        function addMessage(text, isFinal = false) {
+            // Remove placeholder if exists
+            const placeholder = transcriptContent.querySelector('.message[style*="opacity"]');
+            if (placeholder) placeholder.remove();
+
+            const div = document.createElement('div');
+            div.className = `message ${isFinal ? 'final' : ''}`;
+            div.textContent = text;
+            transcriptContent.appendChild(div);
+
+            // Keep only last 5 messages
+            while (transcriptContent.children.length > 5) {
+                transcriptContent.removeChild(transcriptContent.firstChild);
+            }
+
+            transcriptContent.scrollTop = transcriptContent.scrollHeight;
+        }
+
+        function addSystemLog(msg) {
+            const logs = document.getElementById('system-logs');
+            const div = document.createElement('div');
+            div.className = 'log-item';
+            div.textContent = `> ${msg}`;
+            logs.appendChild(div);
+
+            // Keep only last 3 logs (compact)
+            while (logs.children.length > 3) {
+                logs.removeChild(logs.firstChild);
+            }
+        }
+
+        // Update pipeline step
+        function updatePipelineStep(stepId, isActive, isProcessing, detail, count) {
+            const step = document.getElementById(stepId);
+            step.classList.toggle('active', isActive && !isProcessing);
+            step.classList.toggle('processing', isProcessing);
+
+            if (detail) {
+                step.querySelector('.step-detail').textContent = detail;
+            }
+            if (count !== undefined) {
+                step.querySelector('.step-count') && (step.querySelector('.step-count').textContent = count);
+            }
+        }
+
+        let lastTranscript = "";
+        let lastAgentProcessedAt = 0;
+
+        // Poll for VAD/Transcript status
+        async function fetchStatus() {
+            try {
+                const response = await fetch('/live_data');
+                const data = await response.json();
+
+                // VAD Status
+                if (data.stats.vad_is_speaking) {
+                    vadDot.classList.add('active');
+                    vadStatus.textContent = "Speaking...";
+                } else {
+                    vadDot.classList.remove('active');
+                    vadStatus.textContent = "Listening...";
+                }
+
+                // Live Transcript
+                if (data.live_transcript && data.live_transcript !== lastTranscript) {
+                    // Update live typing effect if we wanted to
+                }
+
+                // Append final transcripts
+                if (data.transcripts && data.transcripts.length > 0) {
+                    const latest = data.transcripts[data.transcripts.length - 1];
+                    if (latest.text !== lastTranscript) {
+                        addMessage(latest.text, true);
+                        lastTranscript = latest.text;
+                    }
+                }
+
+                // Faces
+                document.getElementById('face-count').textContent =
+                    `${data.stats.device_glasses_active ? (data.stats.last_image_time ? "1" : "0") : "0"} Faces`;
+
+            } catch (e) {
+                // console.error("Status poll failed", e);
+            }
+        }
+
+        // Poll for Agent Results
+        async function pollAgentStatus() {
+            try {
+                const response = await fetch('/agent_status');
+                const data = await response.json();
+
+                if (!data.processed_at) return;
+
+                // Only update if new data
+                if (data.processed_at > lastAgentProcessedAt) {
+                    lastAgentProcessedAt = data.processed_at;
+
+                    const triggerBox = document.getElementById('trigger-box');
+                    const header = triggerBox.querySelector('.trigger-header');
+                    const content = document.getElementById('trigger-text');
+
+                    // Fact Check Result (Priority 1)
+                    if (data.fact_check_result) {
+                        // Set style based on verdict
+                        const verdict = data.fact_check_result.verdict;
+                        const icon = verdict === 'True' ? 'uil-check-circle' : (verdict === 'False' ? 'uil-times-circle' : 'uil-question-circle');
+                        const color = verdict === 'True' ? 'var(--success)' : (verdict === 'False' ? 'var(--error)' : 'var(--warning)');
+
+                        header.innerHTML = `<i class="uil ${icon}"></i> Fact Check: ${verdict}`;
+                        header.style.color = color;
+                        content.innerHTML = `
+                            <div style="font-size: 0.9rem; margin-bottom: 4px; opacity: 0.8;">"${data.fact_check_result.claim}"</div>
+                            <div style="font-weight: 600; color: ${color};">${data.fact_check_result.explanation}</div>
+                        `;
+
+                        triggerBox.style.borderColor = color;
+                        triggerBox.style.backgroundColor = verdict === 'True' ? 'rgba(102, 187, 106, 0.1)' : (verdict === 'False' ? 'rgba(239, 83, 80, 0.1)' : 'rgba(255, 167, 38, 0.1)');
+                        triggerBox.classList.add('visible');
+
+                        addSystemLog(`Fact Check: ${verdict}`);
+                    }
+                    // Memory Trigger (Priority 2)
+                    else if (data.trigger_message) {
+                        header.innerHTML = `<i class="uil uil-lightbulb-alt"></i> Memory Trigger`;
+                        header.style.color = 'var(--primary)';
+                        content.textContent = data.trigger_message;
+
+                        triggerBox.style.borderColor = 'var(--primary-glow)';
+                        triggerBox.style.backgroundColor = 'rgba(92, 107, 192, 0.1)';
+                        triggerBox.classList.add('visible');
+
+                        addSystemLog("Smart trigger generated");
+                    }
+
+                    // Update Person Card
+                    if (data.person_name || (data.person_id && !data.is_new_person)) {
+                        const card = document.getElementById('person-card');
+                        const name = document.getElementById('person-name');
+                        const role = document.getElementById('person-role');
+                        const tagsContainer = document.getElementById('person-tags');
+                        const statsContainer = document.getElementById('person-stats');
+                        const detailsContainer = document.getElementById('person-details');
+
+                        card.classList.add('visible');
+
+                        // Handle potential missing name/profile
+                        const pName = data.person_name || (data.person_profile ? data.person_profile.name : "Identified Person");
+                        name.textContent = pName;
+
+                        if (data.person_profile) {
+                            const profile = data.person_profile;
+
+                            // Role and Company
+                            const roleText = [profile.role, profile.company].filter(Boolean).join(' at ');
+                            role.textContent = roleText || "Known Contact";
+
+                            // Stats
+                            if (profile.encounter_count) {
+                                statsContainer.style.display = 'flex';
+                                document.getElementById('encounter-count').textContent = profile.encounter_count;
+
+                                // Format last seen
+                                if (profile.last_seen) {
+                                    const lastSeen = new Date(profile.last_seen);
+                                    const now = new Date();
+                                    const diffMs = now - lastSeen;
+                                    const diffDays = Math.floor(diffMs / (1000 * 60 * 60 * 24));
+                                    const diffHours = Math.floor(diffMs / (1000 * 60 * 60));
+                                    const diffMins = Math.floor(diffMs / (1000 * 60));
+
+                                    let lastSeenText = 'Just now';
+                                    if (diffDays > 0) lastSeenText = `${diffDays}d ago`;
+                                    else if (diffHours > 0) lastSeenText = `${diffHours}h ago`;
+                                    else if (diffMins > 0) lastSeenText = `${diffMins}m ago`;
+
+                                    document.getElementById('last-seen').textContent = lastSeenText;
+                                }
+                            }
+
+                            // Details section
+                            let hasDetails = false;
+
+                            // Company
+                            const companyRow = document.getElementById('detail-company');
+                            if (profile.company) {
+                                companyRow.querySelector('.value').textContent = profile.company;
+                                companyRow.style.display = 'flex';
+                                hasDetails = true;
+                            }
+
+                            // Interests
+                            const interestsRow = document.getElementById('detail-interests');
+                            if (profile.interests && profile.interests.length > 0) {
+                                interestsRow.querySelector('.value').textContent = profile.interests.slice(0, 3).join(', ');
+                                interestsRow.style.display = 'flex';
+                                hasDetails = true;
+                            }
+
+                            // Personal fact (most recent)
+                            const factRow = document.getElementById('detail-fact');
+                            if (profile.personal_facts && profile.personal_facts.length > 0) {
+                                factRow.querySelector('.value').textContent = profile.personal_facts[profile.personal_facts.length - 1];
+                                factRow.style.display = 'flex';
+                                hasDetails = true;
+                            }
+
+                            // Follow-up (most recent)
+                            const followupRow = document.getElementById('detail-followup');
+                            if (profile.follow_ups && profile.follow_ups.length > 0) {
+                                followupRow.querySelector('.value').textContent = profile.follow_ups[profile.follow_ups.length - 1];
+                                followupRow.style.display = 'flex';
+                                hasDetails = true;
+                            }
+
+                            if (hasDetails) {
+                                detailsContainer.style.display = 'block';
+                            }
+
+                            // Tags: Topics + Interests
+                            const topics = profile.all_topics || [];
+                            const interests = profile.interests || [];
+                            let tagsHtml = '';
+
+                            // Add interest tags (max 2)
+                            interests.slice(0, 2).forEach(i => {
+                                tagsHtml += `<span class="tag interest">${i}</span>`;
+                            });
+
+                            // Add topic tags (max 3)
+                            topics.slice(0, 3).forEach(t => {
+                                tagsHtml += `<span class="tag topic">${t}</span>`;
+                            });
+
+                            if (tagsHtml) {
+                                tagsContainer.innerHTML = tagsHtml;
+                            }
+                        } else {
+                            role.textContent = "Known Contact";
+                        }
+
+                        addSystemLog(`Identified: ${name.textContent}`);
+                    }
+
+                    // Log errors
+                    if (data.errors && data.errors.length > 0) {
+                        data.errors.forEach(err => addSystemLog(`Error: ${err}`));
+                    }
+
+                    // Update Pipeline Visualization
+                    weaveCount++;
+                    document.getElementById('weave-count').textContent = weaveCount;
+                    updatePipelineStep('step-weave', true, false, `Logged event #${weaveCount}`);
+
+                    // LLM was used
+                    llmCount++;
+                    document.getElementById('llm-count').textContent = llmCount;
+                    if (data.trigger_message) {
+                        updatePipelineStep('step-llm', true, false, 'Generated memory trigger');
+                    } else {
+                        updatePipelineStep('step-llm', true, false, 'Analyzed transcript');
+                    }
+
+                    // Redis lookup/store
+                    if (data.person_id || data.face_detected) {
+                        redisCount++;
+                        document.getElementById('redis-count').textContent = redisCount;
+                        if (data.is_new_person) {
+                            updatePipelineStep('step-redis', true, false, 'Stored new person');
+                        } else {
+                            updatePipelineStep('step-redis', true, false, `Found: ${data.person_name || 'Known contact'}`);
+                        }
+                    }
+                }
+
+            } catch (e) {
+                console.error("Agent poll failed", e);
+            }
+        }
+
+        // Initial pipeline setup
+        updatePipelineStep('step-weave', false, false, 'Waiting for events...');
+        updatePipelineStep('step-redis', false, false, 'Face embeddings + profiles');
+        updatePipelineStep('step-llm', false, false, 'Memory triggers + extraction');
+
+        setInterval(fetchStatus, 500);
+        setInterval(pollAgentStatus, 1000);
+    </script>
+</body>
+
+</html>
