@@ -23,6 +23,10 @@ import os
 import time
 import json
 from datetime import datetime
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 from typing import Optional, Dict, List, Any, Annotated, TypedDict, Literal
 from dataclasses import dataclass, asdict
 import operator
@@ -203,31 +207,66 @@ def lookup_person_node(state: ConversationState) -> Dict:
 def generate_trigger_node(state: ConversationState) -> Dict:
     """
     Skill: Smart Trigger Generation
-    Generates a 1-2 line memory cue for the person.
+    Generates a 1-2 line memory cue for the person or conversation insight.
     """
-    profile = state.get("person_profile")
-    if not profile:
-        return {"trigger_message": None, "trigger_confidence": 0.0}
+    # Generate trigger ONLY if we have a person_profile (i.e., known person)
+    if not state.get("person_profile"):
+        # NEW PERSON - Don't generate fake memories!
+        is_new = state.get("is_new_person", True)
+        extracted = state.get("extracted_details", {})
+        person_name = extracted.get("name", "this person") if extracted else "this person"
+        
+        return {
+            "trigger_message": f"First time meeting {person_name}",
+            "trigger_confidence": 1.0,
+            "trigger_type": "new_person"
+        }
     
-    try:
-        trigger = wandb_inference.generate_memory_trigger(profile)
-        
-        # Determine confidence based on available data
-        topics = profile.get("all_topics", [])
-        facts = profile.get("personal_facts", [])
-        confidence = 0.9 if (topics or facts) else 0.6
-        
-        return {
-            "trigger_message": trigger,
-            "trigger_confidence": confidence
-        }
-        
-    except Exception as e:
-        return {
-            "trigger_message": None,
-            "trigger_confidence": 0.0,
-            "errors": state.get("errors", []) + [f"Trigger generation error: {e}"]
-        }
+    # KNOWN PERSON - Generate real memory trigger
+    profile = state.get("person_profile")
+    person_name = profile.get("name") or "this person"
+    encounter_count = profile.get("encounter_count", 1)
+    
+    # Build trigger based on what data we have
+    trigger_parts = []
+    
+    # Show encounter count if name is missing
+    if not profile.get("name"):
+        trigger_parts.append(f"Known person (met {encounter_count}x)")
+    else:
+        trigger_parts.append(person_name)
+    
+    # Add company/role
+    if profile.get("company"):
+        trigger_parts.append(f"from {profile['company']}")
+    if profile.get("role"):
+        trigger_parts.append(f"({profile['role']})")
+    
+    # Add topics
+    topics = profile.get("all_topics", [])
+    if topics:
+        trigger_parts.append(f"discussed: {', '.join(topics[-2:])}")
+    
+    # Add personal facts
+    facts = profile.get("personal_facts", [])
+    if facts:
+        trigger_parts.append(f"remember: {facts[-1]}")
+    
+    # Add follow-ups
+    follow_ups = profile.get("follow_ups", [])
+    if follow_ups:
+        trigger_parts.append(f"follow up: {follow_ups[-1]}")
+    
+    trigger_message = " - ".join(trigger_parts)
+    
+    # If we have NO data at all except encounter count
+    if len(trigger_parts) == 1 and not profile.get("name"):
+        trigger_message = f"Recognized face (encounter #{encounter_count})"
+    
+    return {
+        "trigger_message": trigger_message,
+        "trigger_confidence": 0.9 if (topics or facts or profile.get("name")) else 0.7
+    }
 
 @weave.op()
 def store_encounter_node(state: ConversationState) -> Dict:
@@ -263,10 +302,16 @@ def store_encounter_node(state: ConversationState) -> Dict:
 # ============================================================================
 
 def should_generate_trigger(state: ConversationState) -> Literal["generate_trigger", "skip_trigger"]:
-    """Decide whether to generate a trigger based on person lookup."""
-    if state.get("person_profile"):
-        return "generate_trigger"
-    return "skip_trigger"
+    """Decide whether to generate a trigger.
+    
+    ONLY generate triggers for:
+    1. Known people (person_profile exists AND is_new_person=False)
+    2. New people (to explicitly say "first meeting")
+    
+    Do NOT generate fake memories for unknown people!
+    """
+    # Always generate - either "first meeting" or real memory
+    return "generate_trigger"
 
 def should_store_encounter(state: ConversationState) -> Literal["store", "skip_store"]:
     """Decide whether to store this encounter."""

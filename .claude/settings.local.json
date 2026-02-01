@@ -12,7 +12,10 @@
       "Bash(taskkill //F //PID 39108)",
       "Bash(taskkill:*)",
       "Bash(dir:*)",
-      "Bash(powershell -Command \"Start-Sleep -Seconds 12; \\(Invoke-WebRequest -Uri ''http://127.0.0.1:9876/debug'' -UseBasicParsing\\).Content\")"
+      "Bash(powershell -Command \"Start-Sleep -Seconds 12; \\(Invoke-WebRequest -Uri ''http://127.0.0.1:9876/debug'' -UseBasicParsing\\).Content\")",
+      "Bash(D:/Projects/TreeHacks/conversationalist/.venv/Scripts/python.exe -c:*)",
+      "Bash(D:/Projects/TreeHacks/conversationalist/.venv/Scripts/python.exe:*)",
+      "Bash(powershell -Command \"Start-Sleep -Seconds 15; \\(Invoke-WebRequest -Uri ''http://127.0.0.1:9876/debug'' -UseBasicParsing\\).Content\")"
     ]
   }
 }

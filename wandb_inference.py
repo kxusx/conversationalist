@@ -15,6 +15,10 @@ Models available for LoRA fine-tuning:
 import os
 from typing import Optional, List, Dict, Any
 from openai import OpenAI
+from dotenv import load_dotenv
+
+# Load environment variables from .env file
+load_dotenv()
 
 # ============================================================================
 # CONFIGURATION

@@ -43,6 +43,9 @@ from silero_vad import load_silero_vad, get_speech_timestamps
 # Whisper for transcription (using local faster-whisper)
 from whisper_service import FasterWhisperService
 
+# Redis for monitoring
+from person_store import r as redis_client
+
 app = Flask(__name__)
 CORS(app)  # Enable CORS for glasses WiFi POST requests
 
@@ -105,6 +108,18 @@ stats = {
     "transcripts_count": 0,
     "device_glasses_active": False,
 }
+
+# Redis Stats
+redis_stats = {
+    "connected": False,
+    "version": "Unknown",
+    "key_count": 0,
+    "profile_count": 0,
+    "conversation_count": 0,
+    "total_memory": "0B",
+    "recent_profiles": []
+}
+redis_stats_lock = threading.Lock()
 
 # ==================== LAPTOP MICROPHONE CAPTURE WITH SILERO VAD ====================
 def laptop_mic_thread():
@@ -316,6 +331,57 @@ def agent_processing_thread():
             import traceback
             traceback.print_exc()
 
+# ==================== REDIS MONITOR THREAD ====================
+def redis_monitor_thread():
+    """Periodically check Redis status and stats"""
+    global redis_stats
+    print("[REDIS] Monitor thread started...", flush=True)
+    
+    while True:
+        try:
+            start_t = time.time()
+            info = redis_client.info()
+            dbsize = redis_client.dbsize()
+            
+            # Count specifically
+            profile_keys = redis_client.keys("profile:*")
+            convo_keys = redis_client.keys("conversations:*")
+            
+            # Get recent profiles
+            recent_profiles = []
+            for key in profile_keys[:5]: # top 5 arbitrary
+                try:
+                    p_data = redis_client.get(key)
+                    if p_data:
+                        if isinstance(p_data, bytes):
+                             p_data = p_data.decode('utf-8')
+                        p = json.loads(p_data)
+                        recent_profiles.append({
+                            "name": p.get("name", "Unknown"),
+                            "role": p.get("role"), 
+                            "company": p.get("company")
+                        })
+                except:
+                    pass
+
+            with redis_stats_lock:
+                redis_stats["connected"] = True
+                redis_stats["version"] = info['redis_version']
+                redis_stats["key_count"] = dbsize
+                redis_stats["profile_count"] = len(profile_keys)
+                redis_stats["conversation_count"] = len(convo_keys)
+                redis_stats["total_memory"] = info['used_memory_human']
+                redis_stats["recent_profiles"] = recent_profiles
+                
+            # print(f"[REDIS] Stats updated: {dbsize} keys, {len(profile_keys)} profiles", flush=True)
+            
+        except Exception as e:
+            print(f"[REDIS] Monitor error: {e}", flush=True)
+            with redis_stats_lock:
+                redis_stats["connected"] = False
+        
+        time.sleep(5)  # Poll every 5s
+
 # ==================== HTML TEMPLATE ====================
 # We use the separate index.html file now
 
@@ -463,6 +529,9 @@ def get_status():
     """
     with agent_result_lock:
         agent_result = dict(latest_agent_result)
+        
+    with redis_stats_lock:
+        current_redis = dict(redis_stats)
 
     return jsonify({
         "vad_active": stats.get("vad_is_speaking", False),
@@ -479,6 +548,7 @@ def get_status():
         "person_name": agent_result.get("person_name"),
         "trigger_message": agent_result.get("trigger_message"),
         "is_new_person": agent_result.get("is_new_person", True),
+        "redis_stats": current_redis
     })
 
 @app.route('/synced_captures')
@@ -540,6 +610,9 @@ if __name__ == '__main__':
         print("[OK] Agent ready!", flush=True)
     except Exception as e:
         print(f"[ERROR] Failed to initialize agent: {e}", flush=True)
+
+    # Redis Monitor
+    threading.Thread(target=redis_monitor_thread, daemon=True).start()
     
     # MDNS
     try:

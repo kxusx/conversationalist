@@ -468,8 +468,15 @@
         }
 
         @keyframes pulseStep {
-            0%, 100% { opacity: 1; }
-            50% { opacity: 0.6; }
+
+            0%,
+            100% {
+                opacity: 1;
+            }
+
+            50% {
+                opacity: 0.6;
+            }
         }
 
         .pipeline-step .step-icon {
@@ -605,13 +612,15 @@
 
             <a href="https://wandb.ai/notpathu-san-jose-state-university/conversationalist/weave" target="_blank"
                 class="status-pill" style="text-decoration: none; color: var(--text-main);">
-                <img src="/assets/weave_logo.png" width="16" height="16" alt="Weave" onerror="this.src='https://wandb.ai/favicon.ico'">
+                <img src="/assets/weave_logo.png" width="16" height="16" alt="Weave"
+                    onerror="this.src='https://wandb.ai/favicon.ico'">
                 <span>Weave</span>
             </a>
 
-            <div class="status-pill" style="border-color: rgba(220, 53, 69, 0.4);">
-                <img src="/assets/redis_logo.png" width="16" height="16" alt="Redis" onerror="this.style.display='none'">
-                <span id="redis-status">Redis</span>
+            <div id="redis-pill" class="status-pill" style="border-color: rgba(220, 53, 69, 0.4);">
+                <img src="/assets/redis_logo.png" width="16" height="16" alt="Redis"
+                    onerror="this.style.display='none'">
+                <span id="redis-status">Redis...</span>
             </div>
         </div>
     </header>
@@ -738,6 +747,19 @@
                         </div>
                         <div id="llm-count" class="step-count">0</div>
                     </div>
+
+                    <!-- Q-LoRA Training -->
+                    <div id="step-lora" class="pipeline-step"
+                        style="border-left-color: var(--accent); background: rgba(38, 166, 154, 0.05);">
+                        <div class="step-icon" style="background: linear-gradient(135deg, #26a69a, #00897b);">
+                            <i class="uil uil-atom"></i>
+                        </div>
+                        <div class="step-info">
+                            <div class="step-name">Q-LoRA Training</div>
+                            <div id="lora-detail" class="step-detail">Collecting data for fine-tuning...</div>
+                        </div>
+                        <div id="lora-count" class="step-count" style="color: var(--accent);">0</div>
+                    </div>
                 </div>
 
                 <!-- Compact Logs -->
@@ -760,6 +782,7 @@
         let weaveCount = 0;
         let redisCount = 0;
         let llmCount = 0;
+        let loraCount = 0;
 
         // Function to add message (keep only last 5)
         function addMessage(text, isFinal = false) {
@@ -787,8 +810,8 @@
             div.textContent = `> ${msg}`;
             logs.appendChild(div);
 
-            // Keep only last 3 logs (compact)
-            while (logs.children.length > 3) {
+            // Keep only last 8 logs (increased from 3 for more visibility)
+            while (logs.children.length > 8) {
                 logs.removeChild(logs.firstChild);
             }
         }
@@ -886,19 +909,29 @@
                     }
                     // Memory Trigger (Priority 2)
                     else if (data.trigger_message) {
-                        header.innerHTML = `<i class="uil uil-lightbulb-alt"></i> Memory Trigger`;
-                        header.style.color = 'var(--primary)';
-                        content.textContent = data.trigger_message;
+                        // Check if it's a "first meeting" trigger
+                        const isFirstMeeting = data.is_new_person || data.trigger_message.toLowerCase().includes('first time');
 
-                        triggerBox.style.borderColor = 'var(--primary-glow)';
-                        triggerBox.style.backgroundColor = 'rgba(92, 107, 192, 0.1)';
+                        if (isFirstMeeting) {
+                            header.innerHTML = `<i class="uil uil-user-plus"></i> New Person`;
+                            header.style.color = 'var(--accent)';
+                            triggerBox.style.borderColor = 'var(--accent)';
+                            triggerBox.style.backgroundColor = 'rgba(38, 166, 154, 0.1)';
+                        } else {
+                            header.innerHTML = `<i class="uil uil-lightbulb-alt"></i> Memory Trigger`;
+                            header.style.color = 'var(--primary)';
+                            triggerBox.style.borderColor = 'var(--primary-glow)';
+                            triggerBox.style.backgroundColor = 'rgba(92, 107, 192, 0.1)';
+                        }
+
+                        content.textContent = data.trigger_message;
                         triggerBox.classList.add('visible');
 
-                        addSystemLog("Smart trigger generated");
+                        addSystemLog(isFirstMeeting ? "New person detected" : "Smart trigger generated");
                     }
 
                     // Update Person Card
-                    if (data.person_name || (data.person_id && !data.is_new_person)) {
+                    if (data.person_id || data.person_profile) {
                         const card = document.getElementById('person-card');
                         const name = document.getElementById('person-name');
                         const role = document.getElementById('person-role');
@@ -909,7 +942,7 @@
                         card.classList.add('visible');
 
                         // Handle potential missing name/profile
-                        const pName = data.person_name || (data.person_profile ? data.person_profile.name : "Identified Person");
+                        const pName = data.person_name || (data.person_profile && data.person_profile.name) || "Known Person";
                         name.textContent = pName;
 
                         if (data.person_profile) {
@@ -1035,10 +1068,99 @@
                             updatePipelineStep('step-redis', true, false, `Found: ${data.person_name || 'Known contact'}`);
                         }
                     }
+
+                    // Q-LoRA Training Data Collection
+                    loraCount++;
+                    document.getElementById('lora-count').textContent = loraCount;
+                    const loraStep = document.getElementById('step-lora');
+                    loraStep.classList.add('active');
+                    loraStep.style.borderLeftColor = 'var(--accent)';
+                    document.getElementById('lora-detail').textContent = `${loraCount} samples for fine-tuning`;
                 }
 
             } catch (e) {
                 console.error("Agent poll failed", e);
+            }
+        }
+
+        // Track previous Redis state for change detection
+        let lastRedisConnected = null;
+        let lastRedisProfileCount = 0;
+
+        // Poll for combined status including Redis
+        async function pollCombinedStatus() {
+            try {
+                const response = await fetch('/status');
+                const data = await response.json();
+
+                // Update Redis status
+                if (data.redis_stats) {
+                    const redis = data.redis_stats;
+                    const redisPill = document.getElementById('redis-pill');
+                    const redisStatusText = document.getElementById('redis-status');
+
+                    // Detect connection state changes
+                    if (lastRedisConnected === null) {
+                        // First check
+                        if (redis.connected) {
+                            addSystemLog(`✅ Redis connected (v${redis.version})`);
+                            addSystemLog(`📊 ${redis.profile_count} profiles, ${redis.conversation_count} conversations`);
+                        } else {
+                            addSystemLog(`❌ Redis offline`);
+                        }
+                    } else if (lastRedisConnected !== redis.connected) {
+                        // State changed
+                        if (redis.connected) {
+                            addSystemLog(`✅ Redis reconnected`);
+                        } else {
+                            addSystemLog(`❌ Redis disconnected`);
+                        }
+                    }
+
+                    // Detect profile count changes
+                    if (redis.connected && lastRedisProfileCount !== redis.profile_count) {
+                        if (lastRedisProfileCount > 0) {
+                            const diff = redis.profile_count - lastRedisProfileCount;
+                            if (diff > 0) {
+                                addSystemLog(`📈 +${diff} new profile(s) stored in Redis`);
+                            }
+                        }
+                        lastRedisProfileCount = redis.profile_count;
+                    }
+
+                    lastRedisConnected = redis.connected;
+
+                    if (redis.connected) {
+                        redisStatusText.textContent = `Redis (${redis.profile_count} profiles)`;
+                        redisPill.style.borderColor = 'rgba(102, 187, 106, 0.5)';
+
+                        // Update Redis pipeline step with live stats
+                        const redisDetail = document.getElementById('redis-detail');
+                        redisDetail.textContent = `${redis.profile_count} profiles, ${redis.conversation_count} conversations`;
+
+                        // Update count
+                        document.getElementById('redis-count').textContent = redis.profile_count;
+
+                        // Log recent profiles (only on first load or when they change)
+                        if (redis.recent_profiles && redis.recent_profiles.length > 0) {
+                            const recentNames = redis.recent_profiles
+                                .filter(p => p.name && p.name !== 'Unknown')
+                                .map(p => p.name)
+                                .slice(0, 2)
+                                .join(', ');
+
+                            if (recentNames && lastRedisConnected === null) {
+                                // Only log on first load
+                                addSystemLog(`👥 Recent: ${recentNames}`);
+                            }
+                        }
+                    } else {
+                        redisStatusText.textContent = 'Redis (Offline)';
+                        redisPill.style.borderColor = 'rgba(239, 83, 80, 0.5)';
+                    }
+                }
+            } catch (e) {
+                // Silent fail for polling
             }
         }
 
@@ -1049,6 +1171,7 @@
 
         setInterval(fetchStatus, 500);
         setInterval(pollAgentStatus, 1000);
+        setInterval(pollCombinedStatus, 3000); // Poll Redis stats every 3s
     </script>
 </body>
 

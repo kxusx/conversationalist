@@ -33,7 +33,7 @@ anthropic = Anthropic()
 VECTOR_DIM = 128  # Change to 512 if using InsightFace
 DISTANCE_METRIC = "COSINE"  # COSINE, L2, or IP (inner product)
 INDEX_NAME = "face_index"
-FACE_MATCH_THRESHOLD = 0.15  # For COSINE distance: lower = more similar (0 = identical)
+FACE_MATCH_THRESHOLD = 0.30  # For COSINE distance: lower = more similar (increased from 0.15 for better recognition)
 
 
 def create_face_index():
